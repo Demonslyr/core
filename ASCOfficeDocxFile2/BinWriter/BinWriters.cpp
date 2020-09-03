@@ -7649,7 +7649,7 @@ BinaryCommentsTableWriter::BinaryCommentsTableWriter(ParamsWriter& oParamsWriter
 	m_oBcw(oParamsWriter), m_oParamsWriter(oParamsWriter), m_pOfficeDrawingConverter(oParamsWriter.m_pOfficeDrawingConverter)
 {
 };
-void BinaryCommentsTableWriter::Write(OOX::CComments& oComments, OOX::CCommentsExt* pCommentsExt, OOX::CPeople* pPeople, OOX::CCommentsIds* pCommentsIds, std::map<int, bool>& mapIgnoreComments)
+void BinaryCommentsTableWriter::Write(OOX::CComments& oComments, OOX::CCommentsExt* pCommentsExt, OOX::CCommentsExtensible* pCommentsExtensible, OOX::CPeople* pPeople, OOX::CCommentsIds* pCommentsIds, std::map<int, bool>& mapIgnoreComments)
 {
 	ParamsDocumentWriter oParamsDocumentWriter(&oComments);
 	m_oParamsWriter.m_pCurRels = oParamsDocumentWriter.m_pRels;
@@ -7659,12 +7659,12 @@ void BinaryCommentsTableWriter::Write(OOX::CComments& oComments, OOX::CCommentsE
 	m_pOfficeDrawingConverter->ClearShapeTypes();
 
 	int nStart = m_oBcw.WriteItemWithLengthStart();
-	WriteCommentsContent(oComments, pCommentsExt, pPeople, pCommentsIds, mapIgnoreComments, oParamsDocumentWriter);
+	WriteCommentsContent(oComments, pCommentsExt, pCommentsExtensible, pPeople, pCommentsIds, mapIgnoreComments, oParamsDocumentWriter);
 	m_oBcw.WriteItemWithLengthEnd(nStart);
 	
 	m_pOfficeDrawingConverter->SetRels(oldRels);
 }
-void BinaryCommentsTableWriter::WriteCommentsContent(OOX::CComments& oComments, OOX::CCommentsExt* pCommentsExt, OOX::CPeople* pPeople, OOX::CCommentsIds* pCommentsIds, std::map<int, bool>& mapIgnoreComments, ParamsDocumentWriter& oParamsDocumentWriter)
+void BinaryCommentsTableWriter::WriteCommentsContent(OOX::CComments& oComments, OOX::CCommentsExt* pCommentsExt, OOX::CCommentsExtensible* pCommentsExtensible, OOX::CPeople* pPeople, OOX::CCommentsIds* pCommentsIds, std::map<int, bool>& mapIgnoreComments, ParamsDocumentWriter& oParamsDocumentWriter)
 {
 	BinaryDocumentTableWriter oBinaryDocumentTableWriter(m_oParamsWriter, oParamsDocumentWriter, &m_oParamsWriter.m_mapIgnoreComments, NULL);
 
@@ -7674,6 +7674,7 @@ void BinaryCommentsTableWriter::WriteCommentsContent(OOX::CComments& oComments, 
 
 	std::map<std::wstring, OOX::CPerson*> mapAuthorToUserId;
 	std::map<unsigned int, CCommentWriteTemp*> mapParaIdToComment;
+	std::map<unsigned int, CCommentWriteTemp*> mapDurableIdToComment;
 	std::vector<CCommentWriteTemp*> aCommentsToWrite;
 	//map author -> userId
 	if(NULL != pPeople)
@@ -7760,6 +7761,24 @@ void BinaryCommentsTableWriter::WriteCommentsContent(OOX::CComments& oComments, 
 		{
 			OOX::CCommentId* pCommentId = pCommentsIds->m_arrComments[i];
 			if(pCommentId->m_oParaId.IsInit() && pCommentId->m_oDurableId.IsInit())
+			{
+				std::map<unsigned int, CCommentWriteTemp*>::const_iterator pPair = mapParaIdToComment.find(pCommentId->m_oParaId->GetValue());
+				if(mapParaIdToComment.end() != pPair)
+				{
+					CCommentWriteTemp* pCommentWriteTemp = pPair->second;
+					pCommentWriteTemp->nDurableId = pCommentId->m_oDurableId;
+					mapDurableIdToComment[pCommentWriteTemp->nDurableId] = pCommentWriteTemp;
+				}
+			}
+		}
+	}
+
+	if(NULL != pCommentsExtensible)
+	{
+		for(size_t i = 0, length = pCommentsExtensible->m_arrComments.size(); i < length; i++)
+		{
+			OOX::CCommentExtensible* pCommentExtensible = pCommentsExtensible->m_arrComments[i];
+			if(pCommentExtensible->m_oParaId.IsInit() && pCommentId->m_oDurableId.IsInit())
 			{
 				std::map<unsigned int, CCommentWriteTemp*>::const_iterator pPair = mapParaIdToComment.find(pCommentId->m_oParaId->GetValue());
 				if(mapParaIdToComment.end() != pPair)
@@ -8632,6 +8651,7 @@ void BinaryFileWriter::intoBindoc(const std::wstring& sDir)
 		BinDocxRW::BinaryCommentsTableWriter oBinaryCommentsTableWriter(m_oParamsWriter);
 		int nCurPos = this->WriteTableStart(BinDocxRW::c_oSerTableTypes::Comments);
 		oBinaryCommentsTableWriter.Write(*pComments,	(pDocx ? pDocx->m_pCommentsExt : NULL), 
+														(pDocx ? pDocx->m_pCommentsExtensible : NULL),
 														(pDocx ? pDocx->m_pPeople : NULL), 
 														(pDocx ? pDocx->m_pCommentsIds : NULL), 
 															m_oParamsWriter.m_mapIgnoreComments);
@@ -8641,7 +8661,7 @@ void BinaryFileWriter::intoBindoc(const std::wstring& sDir)
 	{
 		BinDocxRW::BinaryCommentsTableWriter oBinaryCommentsTableWriter(m_oParamsWriter);
 		int nCurPos = this->WriteTableStart(BinDocxRW::c_oSerTableTypes::DocumentComments);
-		oBinaryCommentsTableWriter.Write(*pDocx->m_pDocumentComments, pDocx->m_pDocumentCommentsExt, pDocx->m_pDocumentPeople, pDocx->m_pDocumentCommentsIds, m_oParamsWriter.m_mapIgnoreComments);
+		oBinaryCommentsTableWriter.Write(*pDocx->m_pDocumentComments, pDocx->m_pDocumentCommentsExt, pDocx->m_pDocumentCommentsExtensible, pDocx->m_pDocumentPeople, pDocx->m_pDocumentCommentsIds, m_oParamsWriter.m_mapIgnoreComments);
 		this->WriteTableEnd(nCurPos);
 	}
 
